@@ -201,13 +201,13 @@ def render_final_page():
 
 
 def scroll_to_top() -> None:
-    st.components.v1.html(
+    st.markdown(
         """
         <script>
-          window.parent.scrollTo(0, 0);
+        window.scrollTo({top: 0, left: 0, behavior: "auto"});
         </script>
         """,
-        height=0,
+        unsafe_allow_html=True,
     )
 
 
