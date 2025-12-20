@@ -1,16 +1,103 @@
+import json
 import os
 import re
+import time
 from datetime import datetime
 from html import escape
 from pathlib import Path
 
 import pandas as pd
 import streamlit as st
+from google.oauth2.service_account import Credentials
+from googleapiclient.discovery import build
 
 RESTORED_CSV = "src/expert_eval_candidates.csv"
-LOG_CSV = "src/expert_log.csv"
 
 DN_PATTERN = re.compile(r"\[D\d+\]")
+
+
+LOG_HEADER = [
+    "timestamp",
+    "annotator",
+    "data_id",
+    "q1_selected_labels",
+    "q1_selected_indices",
+    "q1_selected_model_rank",
+    "q1_no_answer",
+    "q1_comment",
+    "system_rank_1_label",
+    "system_rank_1_model",
+    "system_rank_2_label",
+    "system_rank_2_model",
+    "system_rank_3_label",
+    "system_rank_3_model",
+    "global_comment",
+]
+
+
+@st.cache_resource
+def _get_sheets_service():
+    """
+    Google Sheets API 클라이언트를 생성한다.
+    Streamlit Cloud에서는 st.secrets의 서비스계정 JSON을 사용한다.
+    """
+    if "GCP_SERVICE_ACCOUNT" not in st.secrets:
+        raise RuntimeError("Streamlit Secrets에 GCP_SERVICE_ACCOUNT가 없습니다.")
+    sa_info = json.loads(st.secrets["GCP_SERVICE_ACCOUNT"])
+    creds = Credentials.from_service_account_info(
+        sa_info,
+        scopes=["https://www.googleapis.com/auth/spreadsheets"],
+    )
+    return build("sheets", "v4", credentials=creds, cache_discovery=False)
+
+
+def append_log_row_to_sheet(row: dict) -> None:
+    """
+    Google Spreadsheet에 row 한 줄을 append 한다.
+    - 헤더가 없으면 1행에 헤더를 먼저 쓴다.
+    - 429 등 일시 오류는 백오프 재시도한다.
+    """
+    if "SHEET_ID" not in st.secrets:
+        raise RuntimeError("Streamlit Secrets에 SHEET_ID가 없습니다.")
+    sheet_id = str(st.secrets["SHEET_ID"]).strip()
+    tab = str(st.secrets.get("SHEET_TAB", "log")).strip()
+
+    service = _get_sheets_service()
+
+    # 헤더 확인(없으면 생성)
+    header_range = f"{tab}!A1:O1"
+    existing = (
+        service.spreadsheets()
+        .values()
+        .get(spreadsheetId=sheet_id, range=header_range)
+        .execute()
+        .get("values", [])
+    )
+    if not existing:
+        service.spreadsheets().values().update(
+            spreadsheetId=sheet_id,
+            range=header_range,
+            valueInputOption="RAW",
+            body={"values": [LOG_HEADER]},
+        ).execute()
+
+    # append (재시도)
+    values = [str(row.get(k, "")) for k in LOG_HEADER]
+    last_err = None
+    for attempt in range(5):
+        try:
+            service.spreadsheets().values().append(
+                spreadsheetId=sheet_id,
+                range=f"{tab}!A:O",
+                valueInputOption="RAW",
+                insertDataOption="INSERT_ROWS",
+                body={"values": [values]},
+            ).execute()
+            return
+        except Exception as e:
+            last_err = e
+            time.sleep(min(2**attempt, 10))
+    raise RuntimeError(f"Google Sheet 저장 실패: {last_err}")
 
 
 def format_restored_sentence(masked_document: str, restored_sentence: str) -> str:
@@ -65,15 +152,6 @@ def load_restored_csv(path: str) -> pd.DataFrame:
     return df
 
 
-def append_log_row(log_path: str, row: dict) -> None:
-    """로그 CSV에 한 줄을 append 한다."""
-    log_file = Path(log_path)
-    log_file.parent.mkdir(parents=True, exist_ok=True)
-    log_df = pd.DataFrame([row])
-    header = not log_file.exists()
-    log_df.to_csv(log_file, mode="a", index=False, header=header)
-
-
 def render_final_page():
     annotator = st.session_state.get("annotator_name", "")
 
@@ -110,7 +188,13 @@ def render_final_page():
             "system_rank_3_model": "",
             "global_comment": global_comment,
         }
-        append_log_row(LOG_CSV, row)
+
+        try:
+            append_log_row_to_sheet(row)
+        except Exception as e:
+            st.error(str(e))
+            st.stop()
+
         st.success("응답이 제출되었습니다. 감사합니다.")
 
 
@@ -322,10 +406,10 @@ Q1, Q2는 이러한 기준을 바탕으로, 개별 문장 수준과 모델 전�
   모든 문항 평가를 마치면, 전체 평가를 마무리하는 코멘트 페이지가 한 번 더 나타납니다.  
 
   이 최종 코멘트에는 다음과 같은 내용을 포함해 주시면 좋습니다.  
-  - 전체적인 난이도 및 평가 피로도  
+  - 전체적인 난이도 및 평가 피로도 
   - 각 모델(모델 1, 2, 3)에 대한 전반적인 인상  
   - 실제 복원 연구·업무에서 이러한 도구를 사용할 때 기대되는 장점  
-  - 시스템 및 인터페이스 측면에서의 개선점 제안 등  
+  - 시스템 측면에서의 개선점 제안 등  
 
   이 최종 코멘트는 **필수 작성**을 부탁드립니다.  
   연구 방향 설정 및 시스템 개선 시 핵심 참고 자료로 활용될 예정입니다.
@@ -341,7 +425,7 @@ Q1, Q2는 이러한 기준을 바탕으로, 개별 문장 수준과 모델 전�
 본 평가는 문항별로 응답이 저장됩니다. 평가를 잠시 중단하셨다가 다시 진행하실 경우, 왼쪽 사이드 바에서 마지막으로 평가하신 문항의 data_id를 확인하신 뒤 해당 항목부터 이어서 진행해주시면 됩니다.
 
 평가 중 문제가 발생하면 아래 연락처로 문의해 주시기 바랍니다.
-###### 010-5024-9304 
+##### 010-5024-9304 
                 """
             )
 
@@ -431,14 +515,15 @@ Q1, Q2는 이러한 기준을 바탕으로, 개별 문장 수준과 모델 전�
         else:
             corpus = prefix if prefix else "출처 미상"
 
-        date_part = rest.split("_", 1)[0]  # 예: "1651-7-11"
+        date_part = rest.split("_", 1)[0]
         parts = date_part.split("-")
         if len(parts) == 3 and all(x.isdigit() for x in parts):
             y, m, d = (int(parts[0]), int(parts[1]), int(parts[2]))
             month_name = datetime(y, m, d).strftime("%B")
+            # 기존 코드의 "era" 영문을 한국어로 수정
             if king:
-                return f"{corpus}, {d}, {month_name}, {y}, {king} era"
-            return f"{corpus}, {d}, {month_name}, {y}"
+                return f"{corpus}, {y}년 {month_name} {d}일, {king} 재위"
+            return f"{corpus}, {y}년 {month_name} {d}일"
         return f"{corpus}, {king} 재위" if king else corpus
 
     source_line = _format_source_line(current_data_id, king_val)
@@ -470,9 +555,15 @@ Q1, Q2는 이러한 기준을 바탕으로, 개별 문장 수준과 모델 전�
 
     # Q1
     st.subheader("문항 1")
-    st.markdown("##### 각 보기 아래 버튼을 사용해 정답 후보를 선택하세요. 복수 선택 가능합니다.")
-    st.markdown("- 제시된 각 보기는 위 훼손 문장을 서로 다른 시스템이 복원한 결과입니다.")
-    st.markdown("- 전체 보기 중 앞에서 제시한 좋은 복원의 기준에 따라 정답이라고 볼 수 있는 보기를 복수 선택해주세요.")
+    st.markdown(
+        "##### 각 보기 아래 버튼을 사용해 정답 후보를 선택하세요. 복수 선택 가능합니다."
+    )
+    st.markdown(
+        "- 제시된 각 보기는 위 훼손 문장을 서로 다른 시스템이 복원한 결과입니다."
+    )
+    st.markdown(
+        "- 전체 보기 중 앞에서 제시한 좋은 복원의 기준에 따라 정답이라고 볼 수 있는 보기를 복수 선택해주세요."
+    )
     st.markdown('- 정답이라고 판단되는 후보가 없다면, "정답 없음"을 선택해 주세요.')
 
     cols = st.columns(3)
@@ -524,8 +615,12 @@ Q1, Q2는 이러한 기준을 바탕으로, 개별 문장 수준과 모델 전�
     # Q2
     st.markdown("---")
     st.subheader("문항 2")
-    st.markdown("##### 시스템 1, 2, 3 중 전반적으로 가장 좋은 시스템 하나를 선택하세요.")
-    st.markdown("- 전반적으로 가장 합리적이고 자연스러운 후보를 제시한 시스템 하나를 선택해 주세요.")
+    st.markdown(
+        "##### 시스템 1, 2, 3 중 전반적으로 가장 좋은 시스템 하나를 선택하세요."
+    )
+    st.markdown(
+        "- 전반적으로 가장 합리적이고 자연스러운 후보를 제시한 시스템 하나를 선택해 주세요."
+    )
 
     best_key = f"q2_best_model_{current_data_id}"
     if best_key not in st.session_state:
@@ -619,7 +714,9 @@ Q1, Q2는 이러한 기준을 바탕으로, 개별 문장 수준과 모델 전�
                     if bool(st.session_state.get(sel_key, False)):
                         selected_labels.append(f"보기 {i + 1}")
                         selected_indices.append(i + 1)
-                        selected_model_ranks.append(f"{row['model']}:{row['candidate_rank']}")
+                        selected_model_ranks.append(
+                            f"{row['model']}:{row['candidate_rank']}"
+                        )
 
                 if (not selected_labels) and (not bool(no_answer_val)):
                     st.error('최소 1개 보기를 선택하거나 "정답 없음"을 선택해 주세요.')
@@ -650,15 +747,20 @@ Q1, Q2는 이러한 기준을 바탕으로, 개별 문장 수준과 모델 전�
                     "global_comment": "",
                 }
 
-                append_log_row(LOG_CSV, log_row)
+                try:
+                    append_log_row_to_sheet(log_row)
+                except Exception as e:
+                    st.error(str(e))
+                    st.stop()
 
                 if current_idx < len(data_ids) - 1:
                     st.session_state["data_idx"] = current_idx + 1
                     st.success("저장되었습니다. 다음 항목으로 이동합니다.")
                     st.rerun()
-                    
                 else:
-                    st.success("마지막 항목이 저장되었습니다. 최종 코멘트 페이지로 이동합니다.")
+                    st.success(
+                        "마지막 항목이 저장되었습니다. 최종 코멘트 페이지로 이동합니다."
+                    )
                     st.session_state["finished"] = True
                     st.rerun()
 
