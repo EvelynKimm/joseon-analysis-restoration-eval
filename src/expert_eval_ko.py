@@ -80,7 +80,6 @@ def append_log_row_to_sheet(row: dict) -> None:
 
     service = _get_sheets_service()
 
-    # 헤더 확인(없으면 생성)
     header_range = f"{tab}!A1:O1"
     existing = (
         service.spreadsheets()
@@ -97,18 +96,25 @@ def append_log_row_to_sheet(row: dict) -> None:
             body={"values": [LOG_HEADER]},
         ).execute()
 
-    # append (재시도)
     values = [str(row.get(k, "")) for k in LOG_HEADER]
     last_err = None
     for attempt in range(5):
+        st.sidebar.write("DEBUG write to SHEET_ID:", sheet_id)
+        st.sidebar.write("DEBUG write to TAB:", tab)
         try:
-            service.spreadsheets().values().append(
-                spreadsheetId=sheet_id,
-                range=f"{tab}!A:O",
-                valueInputOption="RAW",
-                insertDataOption="INSERT_ROWS",
-                body={"values": [values]},
-            ).execute()
+            resp = (
+                service.spreadsheets()
+                .values()
+                .append(
+                    spreadsheetId=sheet_id,
+                    range=f"{tab}!A:O",
+                    valueInputOption="RAW",
+                    insertDataOption="INSERT_ROWS",
+                    body={"values": [values]},
+                )
+                .execute()
+            )
+            st.sidebar.write("DEBUG append resp:", resp)
             return
         except Exception as e:
             last_err = e
