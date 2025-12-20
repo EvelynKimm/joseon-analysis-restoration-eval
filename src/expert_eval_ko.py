@@ -117,11 +117,9 @@ def render_final_page():
 def main():
     st.set_page_config(page_title="고문서 복원 결과 전문가 평가", layout="wide")
 
-    # ===== 공통 스타일 =====
     st.markdown(
         """
     <style>
-    /* ===== 상단 고정(훼손 문장) 영역: 크기 축소 ===== */
     .sticky-masked-wrapper {
         position: fixed;
         top: 3.5rem;
@@ -134,20 +132,15 @@ def main():
     .sticky-inner {
         max-width: 70rem;
         margin: 0 auto;
-        padding: 0.45rem 1.0rem 0.55rem 1.0rem;
-    }
-    .sticky-inner h3 {
-        margin: 0.0rem 0 0.35rem 0;
-        font-size: 1.15rem;
-        font-weight: 800;
+        padding: 0.75rem 1.25rem 1rem 1.25rem;
     }
     .masked-box {
-        padding: 0.55rem 0.75rem;
-        border-radius: 0.65rem;
+        padding: 0.9rem 1.1rem;
+        border-radius: 0.7rem;
         border: 1px solid #999999;
         background-color: #f0f0f0;
-        font-size: 1.15rem;
-        line-height: 1.65;
+        font-size: 1.55rem;
+        line-height: 2.15;
     }
 
     .restored-token {
@@ -262,7 +255,6 @@ def main():
         unsafe_allow_html=True,
     )
 
-    # ===== 상태 =====
     if "annotator_name" not in st.session_state:
         st.session_state["annotator_name"] = ""
     if "intro_done" not in st.session_state:
@@ -271,10 +263,8 @@ def main():
         st.session_state["data_idx"] = 0
     if "finished" not in st.session_state:
         st.session_state["finished"] = False
-    if "scroll_to_q1" not in st.session_state:
-        st.session_state["scroll_to_q1"] = False
 
-    # ===== 소개 페이지 =====
+    # 소개 페이지
     if not st.session_state["intro_done"]:
         left, center, right = st.columns([1, 2, 1])
         with center:
@@ -351,7 +341,7 @@ Q1, Q2는 이러한 기준을 바탕으로, 개별 문장 수준과 모델 전�
 본 평가는 문항별로 응답이 저장됩니다. 평가를 잠시 중단하셨다가 다시 진행하실 경우, 왼쪽 사이드 바에서 마지막으로 평가하신 문항의 data_id를 확인하신 뒤 해당 항목부터 이어서 진행해주시면 됩니다.
 
 평가 중 문제가 발생하면 아래 연락처로 문의해 주시기 바랍니다.
-##### 010-5024-9304 
+###### 010-5024-9304 
                 """
             )
 
@@ -362,7 +352,7 @@ Q1, Q2는 이러한 기준을 바탕으로, 개별 문장 수준과 모델 전�
                 value=st.session_state["annotator_name"],
             )
             st.markdown("- 입력하신 이름은 로그 파일에만 저장됩니다.")
-            if st.button("평가 시작"):
+            if st.button("평가 시작하기"):
                 if not name_input.strip():
                     st.error("이름을 입력해 주세요.")
                     st.stop()
@@ -371,24 +361,10 @@ Q1, Q2는 이러한 기준을 바탕으로, 개별 문장 수준과 모델 전�
                 st.rerun()
         return
 
-    # ===== 최종 페이지 =====
+    # 최종 페이지
     if st.session_state.get("finished", False):
         render_final_page()
         return
-
-    # ===== 스크롤 강제 이동: rerun 이후 문항1 상단으로 =====
-    if st.session_state.get("scroll_to_q1", False):
-        st.markdown(
-            """
-            <script>
-            const el = window.parent.document.getElementById("q1-top");
-            if (el) { el.scrollIntoView({behavior: "instant", block: "start"}); }
-            else { window.scrollTo({ top: 0, behavior: "instant" }); }
-            </script>
-            """,
-            unsafe_allow_html=True,
-        )
-        st.session_state["scroll_to_q1"] = False
 
     annotator = st.session_state["annotator_name"]
     st.title("복원 문장 평가 도구")
@@ -455,26 +431,26 @@ Q1, Q2는 이러한 기준을 바탕으로, 개별 문장 수준과 모델 전�
         else:
             corpus = prefix if prefix else "출처 미상"
 
-        date_part = rest.split("_", 1)[0]
+        date_part = rest.split("_", 1)[0]  # 예: "1651-7-11"
         parts = date_part.split("-")
         if len(parts) == 3 and all(x.isdigit() for x in parts):
             y, m, d = (int(parts[0]), int(parts[1]), int(parts[2]))
             month_name = datetime(y, m, d).strftime("%B")
             if king:
-                return f"{corpus}, {d} {month_name} {y}, {king} era"
-            return f"{corpus}, {d} {month_name} {y}"
-        return f"{corpus}, {king} era" if king else corpus
+                return f"{corpus}, {d}, {month_name}, {y}, {king} era"
+            return f"{corpus}, {d}, {month_name}, {y}"
+        return f"{corpus}, {king} 재위" if king else corpus
 
     source_line = _format_source_line(current_data_id, king_val)
 
-    # ===== 상단 고정: 훼손 문장 + 출처 라인 =====
+    # 상단 고정: 훼손 문장 + 출처 라인
     if masked_document:
         st.markdown(
             f"""
             <div class="sticky-masked-wrapper">
                 <div class="sticky-inner">
-                    <h3>훼손 문장</h3>
-                    <div style="margin: 0.25rem 0 0.45rem 0; font-size:1.05rem; font-weight:800; color:#333333;">
+                    <h3>손상 문장</h3>
+                    <div style="margin: 0.35rem 0 0.65rem 0; font-size:1.25rem; font-weight:800; color:#333333;">
                     {escape(source_line)}
                     </div>
                     <div class="masked-box">
@@ -485,22 +461,18 @@ Q1, Q2는 이러한 기준을 바탕으로, 개별 문장 수준과 모델 전�
             """,
             unsafe_allow_html=True,
         )
-        # 고정 헤더가 콘텐츠를 가리지 않도록 최소 여백
-        st.markdown('<div style="height: 6.0rem;"></div>', unsafe_allow_html=True)
+        st.markdown('<div style="height: 9.0rem;"></div>', unsafe_allow_html=True)
 
     # Q2 라벨(블라인드)
     anon_labels = [f"시스템 {i + 1}" for i in range(len(models))]
     real2anon = {m: anon for m, anon in zip(models, anon_labels)}
     anon2real = {anon: m for m, anon in real2anon.items()}
 
-    # ===== 문항 1 시작 앵커(스크롤 이동 목표) =====
-    st.markdown('<div id="q1-top"></div>', unsafe_allow_html=True)
-
-    # ===== Q1 =====
+    # Q1
     st.subheader("문항 1")
     st.markdown("##### 각 보기 아래 버튼을 사용해 정답 후보를 선택하세요. 복수 선택 가능합니다.")
     st.markdown("- 제시된 각 보기는 위 훼손 문장을 서로 다른 시스템이 복원한 결과입니다.")
-    st.markdown("- 전체 보기 중 앞에서 제시한 좋은 복원의 기준에 따라 정답이라고 볼 수 있는 보기를 복수 선택해 주세요.")
+    st.markdown("- 전체 보기 중 앞에서 제시한 좋은 복원의 기준에 따라 정답이라고 볼 수 있는 보기를 복수 선택해주세요.")
     st.markdown('- 정답이라고 판단되는 후보가 없다면, "정답 없음"을 선택해 주세요.')
 
     cols = st.columns(3)
@@ -549,7 +521,7 @@ Q1, Q2는 이러한 기준을 바탕으로, 개별 문장 수준과 모델 전�
         key=f"q1_no_answer_{current_data_id}",
     )
 
-    # ===== Q2 =====
+    # Q2
     st.markdown("---")
     st.subheader("문항 2")
     st.markdown("##### 시스템 1, 2, 3 중 전반적으로 가장 좋은 시스템 하나를 선택하세요.")
@@ -606,7 +578,7 @@ Q1, Q2는 이러한 기준을 바탕으로, 개별 문장 수준과 모델 전�
                 st.rerun()
             st.markdown("</div>", unsafe_allow_html=True)
 
-    # ===== 코멘트 =====
+    # 코멘트
     st.markdown(
         '<hr style="border:1px solid #b0b0b0; margin: 1.2rem 0 1.0rem 0;">',
         unsafe_allow_html=True,
@@ -619,7 +591,7 @@ Q1, Q2는 이러한 기준을 바탕으로, 개별 문장 수준과 모델 전�
 
     st.markdown("---")
 
-    # ===== 하단 버튼 =====
+    # 좌우 여백을 크게 두고, 가운데 영역에 버튼 2개 배치
     outer_l, center_area, outer_r = st.columns([2, 3, 2])
     with center_area:
         btn_l, gap, btn_r = st.columns([1, 0.2, 1])
@@ -628,7 +600,6 @@ Q1, Q2는 이러한 기준을 바탕으로, 개별 문장 수준과 모델 전�
             if st.button("이전 항목으로 이동", use_container_width=True):
                 if current_idx > 0:
                     st.session_state["data_idx"] = current_idx - 1
-                    st.session_state["scroll_to_q1"] = True
                     st.rerun()
                 else:
                     st.info("첫 번째 항목입니다.")
@@ -683,9 +654,11 @@ Q1, Q2는 이러한 기준을 바탕으로, 개별 문장 수준과 모델 전�
 
                 if current_idx < len(data_ids) - 1:
                     st.session_state["data_idx"] = current_idx + 1
-                    st.session_state["scroll_to_q1"] = True
+                    st.success("저장되었습니다. 다음 항목으로 이동합니다.")
                     st.rerun()
+                    
                 else:
+                    st.success("마지막 항목이 저장되었습니다. 최종 코멘트 페이지로 이동합니다.")
                     st.session_state["finished"] = True
                     st.rerun()
 
