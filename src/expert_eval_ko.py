@@ -337,6 +337,10 @@ Q1, Q2는 이러한 기준을 바탕으로, 개별 문장 수준과 모델 전�
 본 전문가 평가는 다음 기간 동안 진행됩니다.  
 ##### 25년 12월 20일 12시 00분 ~ 25년 12월 27일 23시 59분 
 해당 기간 내에 모든 문항(Q1, Q2)과 최종 코멘트 작성을 완료해 주시기를 부탁드립니다.
+하나의 문제마다 저장되기 때문에 중단 시 왼쪽 탭의 마지막으로 진행했던 문제 data_id를 기억하시어 이후에 지속해주시면 됩니다.
+
+전문가 평가 중 문제 발생 시 아래 전화번호로 연락바랍니다.
+###### 010-5024-9304 
                 """
             )
 
@@ -647,9 +651,23 @@ Q1, Q2는 이러한 기준을 바탕으로, 개별 문장 수준과 모델 전�
 
                 append_log_row(LOG_CSV, log_row)
 
+                # if current_idx < len(data_ids) - 1:
+                #     st.session_state["data_idx"] = current_idx + 1
+                #     st.success("저장되었습니다. 다음 항목으로 이동합니다.")
+                #     st.rerun()
+                    
                 if current_idx < len(data_ids) - 1:
                     st.session_state["data_idx"] = current_idx + 1
-                    st.success("저장되었습니다. 다음 항목으로 이동합니다.")
+
+                    st.markdown(
+                        """
+                        <script>
+                        window.scrollTo({ top: 0, behavior: "instant" });
+                        </script>
+                        """,
+                        unsafe_allow_html=True,
+                    )
+
                     st.rerun()
                 else:
                     st.success("마지막 항목이 저장되었습니다. 최종 코멘트 페이지로 이동합니다.")
