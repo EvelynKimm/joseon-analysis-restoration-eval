@@ -34,15 +34,36 @@ LOG_HEADER = [
 ]
 
 
+# @st.cache_resource
+# def _get_sheets_service():
+#     """
+#     Google Sheets API 클라이언트를 생성한다.
+#     Streamlit Cloud에서는 st.secrets의 서비스계정 JSON을 사용한다.
+#     """
+#     if "GCP_SERVICE_ACCOUNT" not in st.secrets:
+#         raise RuntimeError("Streamlit Secrets에 GCP_SERVICE_ACCOUNT가 없습니다.")
+#     sa_info = json.loads(st.secrets["GCP_SERVICE_ACCOUNT"])
+#     creds = Credentials.from_service_account_info(
+#         sa_info,
+#         scopes=["https://www.googleapis.com/auth/spreadsheets"],
+#     )
+#     return build("sheets", "v4", credentials=creds, cache_discovery=False)
+
+
 @st.cache_resource
 def _get_sheets_service():
-    """
-    Google Sheets API 클라이언트를 생성한다.
-    Streamlit Cloud에서는 st.secrets의 서비스계정 JSON을 사용한다.
-    """
     if "GCP_SERVICE_ACCOUNT" not in st.secrets:
         raise RuntimeError("Streamlit Secrets에 GCP_SERVICE_ACCOUNT가 없습니다.")
-    sa_info = json.loads(st.secrets["GCP_SERVICE_ACCOUNT"])
+
+    raw = st.secrets["GCP_SERVICE_ACCOUNT"]
+
+    raw = raw.replace("\r\n", "\n").strip()
+
+    sa_info = json.loads(raw)
+
+    if "private_key" in sa_info and isinstance(sa_info["private_key"], str):
+        sa_info["private_key"] = sa_info["private_key"].replace("\r\n", "\n")
+
     creds = Credentials.from_service_account_info(
         sa_info,
         scopes=["https://www.googleapis.com/auth/spreadsheets"],
