@@ -7,8 +7,8 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
-RESTORED_CSV = "results/expert_question/expert_eval_candidates.csv"
-LOG_CSV = "results/expert_question/expert_log.csv"
+RESTORED_CSV = "expert_eval_candidates.csv"
+LOG_CSV = "expert_log.csv"
 
 DN_PATTERN = re.compile(r"\[D\d+\]")
 
