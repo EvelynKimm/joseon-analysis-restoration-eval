@@ -36,7 +36,7 @@ def _get_sheets_service():
         raise RuntimeError("Streamlit Secrets에 GCP_SERVICE_ACCOUNT가 없습니다.")
 
     sa_info = dict(st.secrets["GCP_SERVICE_ACCOUNT"])
-    # 혹시 \r\n 섞였으면 정리
+
     if "private_key" in sa_info and isinstance(sa_info["private_key"], str):
         sa_info["private_key"] = sa_info["private_key"].replace("\r\n", "\n")
 
@@ -200,6 +200,17 @@ def render_final_page():
         st.success("응답이 제출되었습니다. 감사합니다.")
 
 
+def scroll_to_top() -> None:
+    st.components.v1.html(
+        """
+        <script>
+          window.parent.scrollTo(0, 0);
+        </script>
+        """,
+        height=0,
+    )
+
+
 def main():
     st.set_page_config(page_title="고문서 복원 결과 전문가 평가", layout="wide")
 
@@ -349,6 +360,8 @@ def main():
         st.session_state["data_idx"] = 0
     if "finished" not in st.session_state:
         st.session_state["finished"] = False
+    if "need_scroll_top" not in st.session_state:
+        st.session_state["need_scroll_top"] = False
 
     # 소개 페이지
     if not st.session_state["intro_done"]:
@@ -454,6 +467,9 @@ Q1, Q2는 이러한 기준을 바탕으로, 개별 문장 수준과 모델 전�
 
     annotator = st.session_state["annotator_name"]
     st.title("복원 문장 평가 도구")
+    if st.session_state.get("need_scroll_top", False):
+        scroll_to_top()
+        st.session_state["need_scroll_top"] = False
 
     if not os.path.exists(RESTORED_CSV):
         st.error(f"복원 결과 CSV 파일을 찾을 수 없습니다: {RESTORED_CSV}")
@@ -697,6 +713,7 @@ Q1, Q2는 이러한 기준을 바탕으로, 개별 문장 수준과 모델 전�
             if st.button("이전 항목으로 이동", use_container_width=True):
                 if current_idx > 0:
                     st.session_state["data_idx"] = current_idx - 1
+                    st.session_state["need_scroll_top"] = True
                     st.rerun()
                 else:
                     st.info("첫 번째 항목입니다.")
@@ -753,13 +770,14 @@ Q1, Q2는 이러한 기준을 바탕으로, 개별 문장 수준과 모델 전�
 
                 if current_idx < len(data_ids) - 1:
                     st.session_state["data_idx"] = current_idx + 1
-                    st.success("저장되었습니다. 다음 항목으로 이동합니다.")
+                    st.session_state["need_scroll_top"] = True
                     st.rerun()
                 else:
                     st.success(
                         "마지막 항목이 저장되었습니다. 최종 코멘트 페이지로 이동합니다."
                     )
                     st.session_state["finished"] = True
+                    st.session_state["need_scroll_top"] = True
                     st.rerun()
 
 
