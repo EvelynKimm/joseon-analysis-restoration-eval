@@ -1,4 +1,3 @@
-import json
 import os
 import re
 import time
@@ -201,18 +200,31 @@ def render_final_page():
 
 
 def scroll_to_top() -> None:
-    st.markdown(
+    st.components.v1.html(
         """
         <script>
-        window.scrollTo({top: 0, left: 0, behavior: "auto"});
+        (function() {
+          try {
+            const doc = window.parent.document;
+            const topEl = doc.getElementById("page_top");
+            if (topEl) {
+              topEl.scrollIntoView({behavior: "auto", block: "start"});
+            } else {
+              window.parent.scrollTo(0, 0);
+            }
+          } catch (e) {
+            window.scrollTo(0, 0);
+          }
+        })();
         </script>
         """,
-        unsafe_allow_html=True,
+        height=0,
     )
 
 
 def main():
     st.set_page_config(page_title="고문서 복원 결과 전문가 평가", layout="wide")
+    st.markdown('<div id="page_top"></div>', unsafe_allow_html=True)
 
     st.markdown(
         """
