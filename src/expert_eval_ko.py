@@ -55,12 +55,8 @@ def _get_sheets_service():
     if "GCP_SERVICE_ACCOUNT" not in st.secrets:
         raise RuntimeError("Streamlit Secrets에 GCP_SERVICE_ACCOUNT가 없습니다.")
 
-    raw = st.secrets["GCP_SERVICE_ACCOUNT"]
-
-    raw = raw.replace("\r\n", "\n").strip()
-
-    sa_info = json.loads(raw)
-
+    sa_info = dict(st.secrets["GCP_SERVICE_ACCOUNT"])
+    # 혹시 \r\n 섞였으면 정리
     if "private_key" in sa_info and isinstance(sa_info["private_key"], str):
         sa_info["private_key"] = sa_info["private_key"].replace("\r\n", "\n")
 
@@ -234,7 +230,7 @@ def main():
         st.write("SHEET_TAB:", _safe_str(st.secrets.get("SHEET_TAB", "log")))
         if "GCP_SERVICE_ACCOUNT" in st.secrets:
             try:
-                sa = json.loads(st.secrets["GCP_SERVICE_ACCOUNT"])
+                sa = dict(st.secrets["GCP_SERVICE_ACCOUNT"])
                 st.write("서비스계정 이메일:", sa.get("client_email", ""))
             except Exception as e:
                 st.error(f"서비스계정 JSON 파싱 실패: {repr(e)}")
