@@ -26,28 +26,8 @@ LOG_HEADER = [
     "q1_comment",
     "system_rank_1_label",
     "system_rank_1_model",
-    "system_rank_2_label",
-    "system_rank_2_model",
-    "system_rank_3_label",
-    "system_rank_3_model",
     "global_comment",
 ]
-
-
-# @st.cache_resource
-# def _get_sheets_service():
-#     """
-#     Google Sheets API 클라이언트를 생성한다.
-#     Streamlit Cloud에서는 st.secrets의 서비스계정 JSON을 사용한다.
-#     """
-#     if "GCP_SERVICE_ACCOUNT" not in st.secrets:
-#         raise RuntimeError("Streamlit Secrets에 GCP_SERVICE_ACCOUNT가 없습니다.")
-#     sa_info = json.loads(st.secrets["GCP_SERVICE_ACCOUNT"])
-#     creds = Credentials.from_service_account_info(
-#         sa_info,
-#         scopes=["https://www.googleapis.com/auth/spreadsheets"],
-#     )
-#     return build("sheets", "v4", credentials=creds, cache_discovery=False)
 
 
 @st.cache_resource
@@ -221,46 +201,6 @@ def render_final_page():
 
 
 def main():
-
-    from googleapiclient.errors import HttpError
-
-    def _safe_str(x):
-        try:
-            return str(x)
-        except Exception:
-            return repr(x)
-
-    with st.sidebar.expander("관리자 디버그: 구글시트", expanded=True):
-        st.write("SHEET_ID 존재:", "SHEET_ID" in st.secrets)
-        st.write("SHEET_ID:", _safe_str(st.secrets.get("SHEET_ID", ""))[:20] + "...")
-        st.write("SHEET_TAB:", _safe_str(st.secrets.get("SHEET_TAB", "log")))
-        if "GCP_SERVICE_ACCOUNT" in st.secrets:
-            try:
-                sa = dict(st.secrets["GCP_SERVICE_ACCOUNT"])
-                st.write("서비스계정 이메일:", sa.get("client_email", ""))
-            except Exception as e:
-                st.error(f"서비스계정 JSON 파싱 실패: {repr(e)}")
-
-        if st.button("✅ 시트에 테스트 1줄 기록", key="sheet_test_write"):
-            test_row = {k: "" for k in LOG_HEADER}
-            test_row["timestamp"] = datetime.now().isoformat(timespec="seconds")
-            test_row["annotator"] = "debug"
-            test_row["data_id"] = "__DEBUG__"
-            test_row["q1_comment"] = "sheet write test"
-
-            try:
-                append_log_row_to_sheet(test_row)
-                st.success(
-                    "테스트 기록 성공: 스프레드시트에 __DEBUG__ 행이 추가되어야 합니다."
-                )
-            except HttpError as e:
-                st.error(f"HttpError: {e}")
-                st.error(f"details: {getattr(e, 'content', b'')}")
-                st.stop()
-            except Exception as e:
-                st.error(f"기타 오류: {repr(e)}")
-                st.stop()
-
     st.set_page_config(page_title="고문서 복원 결과 전문가 평가", layout="wide")
 
     st.markdown(
@@ -802,10 +742,6 @@ Q1, Q2는 이러한 기준을 바탕으로, 개별 문장 수준과 모델 전�
                     "q1_comment": q1_comment,
                     "system_rank_1_label": best_label,
                     "system_rank_1_model": best_real,
-                    "system_rank_2_label": "",
-                    "system_rank_2_model": "",
-                    "system_rank_3_label": "",
-                    "system_rank_3_model": "",
                     "global_comment": "",
                 }
 
