@@ -557,9 +557,9 @@ Q1, Q2는 이러한 기준을 바탕으로, 개별 문장 수준과 모델 전�
             y, m, d = (int(parts[0]), int(parts[1]), int(parts[2]))
             month_name = datetime(y, m, d).strftime("%B")
             if king:
-                return f"{corpus}, {y}년 {month_name} {d}일, {king} 재위"
-            return f"{corpus}, {y}년 {month_name} {d}일"
-        return f"{corpus}, {king} 재위" if king else corpus
+                return f"{corpus}, {d} {month_name} {y}, {king} era"
+            return f"{corpus}, {d} {month_name} {y}"
+        return f"{corpus}, {king} era" if king else corpus
 
     source_line = _format_source_line(current_data_id, king_val)
 
