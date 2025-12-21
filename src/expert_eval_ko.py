@@ -78,10 +78,8 @@ def append_log_row_to_sheet(row: dict) -> None:
     values = [str(row.get(k, "")) for k in LOG_HEADER]
     last_err = None
     for attempt in range(5):
-        st.sidebar.write("DEBUG write to SHEET_ID:", sheet_id)
-        st.sidebar.write("DEBUG write to TAB:", tab)
         try:
-            resp = (
+            (
                 service.spreadsheets()
                 .values()
                 .append(
@@ -93,7 +91,6 @@ def append_log_row_to_sheet(row: dict) -> None:
                 )
                 .execute()
             )
-            st.sidebar.write("DEBUG append resp:", resp)
             return
         except Exception as e:
             last_err = e
