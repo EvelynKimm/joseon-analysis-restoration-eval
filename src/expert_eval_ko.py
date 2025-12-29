@@ -11,8 +11,10 @@ from googleapiclient.discovery import build
 
 RESTORED_CSV = "src/expert_eval_candidates.csv"
 
-DN_PATTERN = re.compile(r"\[D\d+\]")
+# ✅ 이전 응답(annotator별 선택값) CSV
+PREV_LOG_CSV = "src/joseon_expert_eval_post.csv"
 
+DN_PATTERN = re.compile(r"\[D\d+\]")
 
 LOG_HEADER = [
     "timestamp",
@@ -150,6 +152,51 @@ def load_restored_csv(path: str) -> pd.DataFrame:
     return df
 
 
+@st.cache_data
+def load_prev_log(path: str) -> pd.DataFrame:
+    if not path or not os.path.exists(path):
+        return pd.DataFrame()
+    df = pd.read_csv(path)
+
+    # 최소 컬럼 검사
+    if "annotator" not in df.columns or "data_id" not in df.columns:
+        return pd.DataFrame()
+
+    # timestamp 있으면 timestamp 기준 마지막 것을 유지
+    if "timestamp" in df.columns:
+        df = df.sort_values(["annotator", "data_id", "timestamp"])
+    else:
+        df = df.sort_values(["annotator", "data_id"])
+
+    df = df.drop_duplicates(subset=["annotator", "data_id"], keep="last").reset_index(
+        drop=True
+    )
+    return df
+
+
+def _norm_bool(x) -> bool:
+    if isinstance(x, bool):
+        return x
+    if x is None:
+        return False
+    s = str(x).strip().lower()
+    return s in {"1", "true", "t", "yes", "y"}
+
+
+def _parse_int_list(val) -> list[int]:
+    if val is None:
+        return []
+    s = str(val).strip()
+    if not s:
+        return []
+    out = []
+    for tok in s.split(","):
+        tok = tok.strip()
+        if tok.isdigit():
+            out.append(int(tok))
+    return out
+
+
 def render_final_page():
     annotator = st.session_state.get("annotator_name", "")
 
@@ -186,10 +233,6 @@ def render_final_page():
             "q1_comment": "",
             "system_rank_1_label": "",
             "system_rank_1_model": "",
-            "system_rank_2_label": "",
-            "system_rank_2_model": "",
-            "system_rank_3_label": "",
-            "system_rank_3_model": "",
             "global_comment": global_comment,
         }
 
@@ -455,8 +498,8 @@ Q1, Q2는 이러한 기준을 바탕으로, 개별 문장 수준과 시스템 �
 본 평가는 문항별로 응답이 저장됩니다. 평가를 잠시 중단하셨다가 다시 진행하실 경우, 왼쪽 사이드 바에서 마지막으로 평가하신 문항의 data_id를 확인하신 뒤 해당 항목부터 이어서 진행해주시면 됩니다.
 
 평가 중 문제가 발생하면 아래 연락처로 문의해 주시기 바랍니다.
-##### 010-5024-9304 
-                """
+##### 010-5024-9304                 
+"""
             )
 
             st.markdown("---")
@@ -560,7 +603,6 @@ Q1, Q2는 이러한 기준을 바탕으로, 개별 문장 수준과 시스템 �
 
     source_line = _format_source_line(current_data_id, king_val)
 
-    # 상단 고정: 훼손 문장 + 출처 라인
     if masked_document:
         st.markdown(
             f"""
@@ -584,6 +626,49 @@ Q1, Q2는 이러한 기준을 바탕으로, 개별 문장 수준과 시스템 �
     anon_labels = [f"시스템 {i + 1}" for i in range(len(models))]
     real2anon = {m: anon for m, anon in zip(models, anon_labels)}
     anon2real = {anon: m for m, anon in real2anon.items()}
+
+    prev_df = load_prev_log(PREV_LOG_CSV)
+    prev_row = {}
+    if not prev_df.empty:
+        a_df = prev_df[
+            prev_df["annotator"].astype(str).str.strip() == str(annotator).strip()
+        ]
+        if not a_df.empty:
+            hit = a_df[a_df["data_id"].astype(str) == str(current_data_id)]
+            if not hit.empty:
+                prev_row = hit.iloc[0].to_dict()
+
+    prefill_key = f"prefilled_{annotator}_{current_data_id}"
+    if prev_row and not st.session_state.get(prefill_key, False):
+        # Q1 선택 indices
+        prev_indices = set(_parse_int_list(prev_row.get("q1_selected_indices", "")))
+        for i in range(len(option_rows)):
+            sel_key = f"q1_option_{current_data_id}_{i}"
+            st.session_state[sel_key] = (i + 1) in prev_indices
+
+        # Q1 정답 없음
+        st.session_state[f"q1_no_answer_{current_data_id}"] = _norm_bool(
+            prev_row.get("q1_no_answer", False)
+        )
+
+        # Q1 코멘트
+        st.session_state[f"q1_comment_{current_data_id}"] = str(
+            prev_row.get("q1_comment", "") or ""
+        )
+
+        # Q2 best system
+        best_key = f"q2_best_model_{current_data_id}"
+        best_label_saved = str(prev_row.get("system_rank_1_label", "") or "").strip()
+        best_model_saved = str(prev_row.get("system_rank_1_model", "") or "").strip()
+
+        if best_label_saved.startswith("시스템"):
+            st.session_state[best_key] = best_label_saved
+        elif best_model_saved in real2anon:
+            st.session_state[best_key] = real2anon[best_model_saved]
+        else:
+            st.session_state[best_key] = ""
+
+        st.session_state[prefill_key] = True
 
     # Q1
     st.subheader("문항 1")
