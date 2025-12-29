@@ -268,6 +268,20 @@ def scroll_to_top() -> None:
     )
 
 
+def _nan_to_empty(x) -> str:
+    if x is None:
+        return ""
+    try:
+        if pd.isna(x):
+            return ""
+    except Exception:
+        pass
+    s = str(x)
+    if s.strip().lower() == "nan":
+        return ""
+    return s
+
+
 def main():
     st.set_page_config(page_title="고문서 복원 결과 전문가 평가", layout="wide")
     st.markdown('<div id="page_top"></div>', unsafe_allow_html=True)
@@ -652,8 +666,8 @@ Q1, Q2는 이러한 기준을 바탕으로, 개별 문장 수준과 시스템 �
         )
 
         # Q1 코멘트
-        st.session_state[f"q1_comment_{current_data_id}"] = str(
-            prev_row.get("q1_comment", "") or ""
+        st.session_state[f"q1_comment_{current_data_id}"] = _nan_to_empty(
+            prev_row.get("q1_comment", "")
         )
 
         # Q2 best system
